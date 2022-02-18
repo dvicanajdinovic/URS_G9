@@ -22,7 +22,7 @@
 #define SIGNAL_PIN	PINA
 #define LED			0
 
-#define PASS_SIZE	7
+#define PASS_SIZE	6
 #define LCD_WIDTH   16
 
 uint8_t coordinates[2] = {3, 4};
@@ -31,8 +31,9 @@ unsigned char keypad[4][5] = {{'D','#','0','*'},
 {'B','6','5','4'},
 {'A','3','2','1', 'w'}};
 
-char password[PASS_SIZE];
-char temporary_password[PASS_SIZE];
+// +1 for '\0'
+char password[PASS_SIZE + 1];
+char temporary_password[PASS_SIZE + 1];
 
 void get_char() {
 	uint8_t r,c;
@@ -72,12 +73,12 @@ void enter_password() {
 	lcd_puts("Enter password:");
 	
 	uint8_t i = 0, counter = 0;
-	while (i != PASS_SIZE - 1) {
+	while (i < PASS_SIZE) {
 		get_char();
 		char c = keypad[coordinates[0]][coordinates[1]];
 		if (c != 'w') {
 			temporary_password[i] = c;
-			lcd_gotoxy((LCD_WIDTH - PASS_SIZE - 1) / 2 + i, 1);
+			lcd_gotoxy((LCD_WIDTH - PASS_SIZE) / 2 + i, 1);
 			lcd_putc('*');
 			i++;
 			counter = 0;
@@ -91,10 +92,10 @@ void enter_password() {
 	// call delay function, so the last '*' can be shown too
 	_delay_ms(2000);
 	
-	if (i < PASS_SIZE - 1) {
+	if (i < PASS_SIZE) {
 		enter_password();
 	} else {
-		temporary_password[PASS_SIZE - 1] = '\0';
+		temporary_password[PASS_SIZE] = '\0';
 		check_password(temporary_password);
 	}	
 }
@@ -119,7 +120,7 @@ void set_password() {
 	lcd_clrscr();
 	
 	uint8_t i = 0, counter = 0;
-	while (i != PASS_SIZE - 1) {
+	while (i < PASS_SIZE) {
 		get_char();
 		char c = keypad[coordinates[0]][coordinates[1]];
 		if (c != 'w') {
