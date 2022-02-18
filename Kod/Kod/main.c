@@ -22,7 +22,8 @@
 #define SIGNAL_PIN	PINA
 #define LED			0
 
-#define PASS_SIZE	5
+#define PASS_SIZE	7
+#define LCD_WIDTH   16
 
 uint8_t coordinates[2] = {3, 4};
 unsigned char keypad[4][5] = {{'D','#','0','*'},
@@ -57,7 +58,7 @@ void get_char() {
 void check_password(char temp[]) {
 	if (!strcmp(temp, password)) {
 		lcd_clrscr();
-		lcd_puts("You got it");
+		lcd_puts("You got it!");
 		SIGNAL_DDR = _BV(LED);
 		} else {
 		lcd_clrscr();
@@ -67,25 +68,38 @@ void check_password(char temp[]) {
 }
 
 void enter_password() {
-	uint8_t i = 0;
+	lcd_clrscr();
+	lcd_puts("Enter password:");
+	
+	uint8_t i = 0, counter = 0;
 	while (i != PASS_SIZE - 1) {
 		get_char();
 		char c = keypad[coordinates[0]][coordinates[1]];
 		if (c != 'w') {
 			temporary_password[i] = c;
-			lcd_gotoxy(0 + i, 1);
+			lcd_gotoxy((LCD_WIDTH - PASS_SIZE - 1) / 2 + i, 1);
 			lcd_putc('*');
 			i++;
+			counter = 0;
 		}
 		_delay_ms(200);
+		counter++;
+		if (counter == 50) {
+			break;
+		}
 	}
 	// call delay function, so the last '*' can be shown too
 	_delay_ms(2000);
 	
-	temporary_password[PASS_SIZE - 1] = '\0';
-	check_password(temporary_password);
+	if (i < PASS_SIZE - 1) {
+		enter_password();
+	} else {
+		temporary_password[PASS_SIZE - 1] = '\0';
+		check_password(temporary_password);
+	}	
 }
 
+//dodaj neku bool varijablu koja ce kontrolirati smije li se unijeti novi pass
 void change_password() {
 	enter_password();
 	check_password(temporary_password);
@@ -94,36 +108,44 @@ void change_password() {
 	
 	lcd_clrscr();
 	lcd_puts("Pass changed");
-	lcd_gotoxy(0, 1);
-	lcd_puts(password);
 }
 
 void set_password() {
+	lcd_clrscr();
 	lcd_puts("Please set your");
 	lcd_gotoxy(3, 1);
 	lcd_puts("password!");
 	_delay_ms(4000);
 	lcd_clrscr();
 	
-	uint8_t i = 0;
+	uint8_t i = 0, counter = 0;
 	while (i != PASS_SIZE - 1) {
 		get_char();
 		char c = keypad[coordinates[0]][coordinates[1]];
 		if (c != 'w') {
 			password[i] = c;
-			lcd_gotoxy(0 + i, 1);
+			lcd_gotoxy((LCD_WIDTH - PASS_SIZE - 1) / 2 + i, 1);
 			lcd_putc('*');
 			i++;
+			counter = 0;
 		}
 		_delay_ms(200);
+		counter++;
+		if (counter == 50) {
+			break;
+		}
 	}
 	// call delay function, so the last '*' can be shown too
 	_delay_ms(2000);
 	
-	lcd_clrscr();
-	lcd_gotoxy(1, 0);
-	lcd_puts("Password set!");
-	_delay_ms(5000);
+	if (i < PASS_SIZE - 1) {
+		set_password();
+	} else {
+		lcd_clrscr();
+		lcd_gotoxy(1, 0);
+		lcd_puts("Password set!");
+		_delay_ms(5000);
+	}
 }
 
 int main(void)
@@ -135,9 +157,7 @@ int main(void)
 	OCR1B = 128;
 
 	lcd_init(LCD_DISP_ON);
-	lcd_clrscr();
-	
-	
+		
 	//DDR and PORT setup for LEDS (or buzzer)
 	SIGNAL_DDR = 0x00;
 	SIGNAL_PRT = 0x00;
@@ -147,12 +167,12 @@ int main(void)
 	while (1) {
 		if (SIGNAL_DDR & 0x01) {
 			lcd_clrscr();
-			lcd_puts("NO");
-			} else {
-			lcd_clrscr();
-			lcd_puts("Enter password:");
+			lcd_puts("Unlocked!");
+		} else {
 			enter_password();
 		}
 		_delay_ms(10000);
 	}
 }
+
+
