@@ -1,25 +1,25 @@
 #define F_CPU 7372800UL
 
 #include <avr/io.h>
-#include <util/delay.h>
 #include <avr/interrupt.h>
+#include <util/delay.h>
 
 #include "lcd.h"
-#include "stdlib.h"
 #include "stdio.h"
+#include "stdlib.h"
 #include "string.h"
 
 #define PIR_DDR		DDRC
-#define PIR_PRT		PORTC
+#define PIR_PORT		PORTC
 #define PIR_PIN		PINC
 #define PIR_SENSOR	PC0
 
 #define KEY_DDR 	DDRB
-#define KEY_PRT		PORTB
+#define KEY_PORT		PORTB
 #define KEY_PIN		PINB
 
 #define SIGNAL_DDR 	DDRA
-#define SIGNAL_PRT	PORTA
+#define SIGNAL_PORT	PORTA
 #define SIGNAL_PIN	PINA
 #define LED			0
 
@@ -28,8 +28,6 @@
 
 uint8_t reset_password_input = 0;
 uint8_t armed = 0;
-uint8_t password_set = 0;
-uint8_t movement_detected = 0;
 uint16_t timer0_multip = 0;
 
 uint8_t coordinates[2] = {3, 4};
@@ -39,10 +37,6 @@ unsigned char keypad[4][5] = {
 	{'B','6','5','4'},
 	{'A','3','2','1', 'w'}
 };
-
-// +1 for '\0'
-char password[PASS_SIZE + 1];
-char temporary_password[PASS_SIZE + 1];
 
 void get_char() {
 	uint8_t r,c;
@@ -65,40 +59,28 @@ void get_char() {
 	coordinates[1] = 4;
 }
 
-void check_password() {
-	if (!strcmp(temporary_password, password)) {
-		armed = 0;
-		movement_detected = 0;
-		
-		lcd_clrscr();
-		lcd_puts("You got it!");
-	} else {
-		lcd_clrscr();
-		lcd_puts("Pass incorrect");
+void user_input(char *input) {
 
-	}
-}
-
-void enter_password() {
-	//disable timer0
-	TIMSK &= ~_BV(OCIE0);
-	
-	lcd_clrscr();
-	lcd_puts("Enter password:");
-	
 	uint8_t i = 0;
 	while (i < PASS_SIZE) {
-		//enable timer0
+		// Enable timer0 to limit user input time
 		if(i == 1) {
 			TIMSK = _BV(OCIE0);
 		}
+
 		get_char();
 		char c = keypad[coordinates[0]][coordinates[1]];
+		
 		if (c != 'w') {
+			// Reset timer0
 			timer0_multip = 0;
-			temporary_password[i] = c;
+
+			*(input + i) = c;
+
 			lcd_gotoxy((LCD_WIDTH - PASS_SIZE) / 2 + i, 1);
+			// lcd_putc('*');
 			lcd_putc(c);
+			
 			i++;
 		}
 		_delay_ms(200);
@@ -106,141 +88,192 @@ void enter_password() {
 		if(reset_password_input) {
 			i = 0;
 			reset_password_input = 0;
+
 			lcd_clrscr();
-			lcd_puts("Enter password:");
+			lcd_puts("Input timed out,");
+			lcd_gotoxy(3, 1);
+			lcd_puts("try again.");
+			_delay_ms(600);
+
+			lcd_clrscr();
+			lcd_puts("Password:");
 		}
 		
 	}
-	//disable timer0
-	TIMSK &= ~_BV(OCIE0);
-	
-	// call delay function, so the last '*' can be shown too
+	// Call delay function, so the last '*' can be shown too
 	_delay_ms(1000);
-	
-	temporary_password[PASS_SIZE] = '\0';
-	check_password();
 }
 
-//dodaj neku bool varijablu koja ce kontrolirati smije li se unijeti novi pass
-void change_password() {
-	enter_password();
-	check_password(temporary_password);
-	enter_password();
-	strcpy(password, temporary_password);
-	
+int verify_password(char *tmp_password, char *password) {
+	if (!strcmp(tmp_password, password)) {
+		lcd_clrscr();
+		lcd_puts("Password");
+		lcd_gotoxy(3, 1);
+		lcd_puts("correct.");
+		_delay_ms(600);
+
+		return 1;
+	} else {
+		lcd_clrscr();
+		lcd_puts("Password");
+		lcd_gotoxy(3, 1);
+		lcd_puts("incorrect.");
+		_delay_ms(600);
+
+		return 0;
+	}
+}
+
+void disArm(char *password, char option) {	
 	lcd_clrscr();
-	lcd_puts("Pass changed");
+	lcd_puts("Enter password:");
+
+    char *tmp_password = (char*) malloc(7 * sizeof(char));
+	
+	user_input(tmp_password);
+	
+	*(tmp_password+6) = '\0';
+
+    // Disable timer0
+	TIMSK &= ~_BV(OCIE0);
+
+	if (verify_password(tmp_password, password)) {
+		free(tmp_password);
+		if (option == 'A') {
+			armed = 1;
+
+			lcd_clrscr();
+			lcd_puts("Alarm armed.");
+			_delay_ms(600);
+		} else if (option == 'D') {
+			// If turned on, turn off the alarm
+			if (SIGNAL_PORT == 0xfe) SIGNAL_PORT = 0xff;
+
+			armed = 0;
+
+			lcd_clrscr();
+			lcd_puts("Alarm disarmed.");
+			_delay_ms(600);
+		}	
+	}
 }
 
-void set_password() {
-	
-	//disable timer0
-	TIMSK &= ~_BV(OCIE0);
+void change_password() {
+	lcd_clrscr();
+	lcd_puts("Enter old");
+	lcd_gotoxy(3, 1);
+	lcd_puts("password.");
+	_delay_ms(200);
+
+	char *tmp_password = (char*) malloc(7 * sizeof(char));
+	user_input(tmp_password);
+
+	if (verify_password(tmp_password, password)){
+		free(tmp_password);
+
+		lcd_clrscr();
+		lcd_puts("Please enter");
+		lcd_gotoxy(3, 1);
+		lcd_puts("new password:");
+		_delay_ms(300);
+		
+		char *new_password = (char*) malloc(7 * sizeof(char));
+		user_input(new_password);
+
+		strcpy(password, new_password);
+		
+		lcd_clrscr();
+		lcd_puts("Password");
+		lcd_gotoxy(3, 1);
+		lcd_puts("changed.");
+	} 
+}
+
+void set_password(char *password) {
 	lcd_clrscr();
 	lcd_puts("Please set your");
 	lcd_gotoxy(3, 1);
 	lcd_puts("password!");
 	_delay_ms(1000);
+
 	lcd_clrscr();
 	lcd_home();
 	lcd_puts("Password:");
-	
-	uint8_t i = 0;
-	while (i < PASS_SIZE) {
-		//enable timer0
-		if(i == 1) {
-			TIMSK = _BV(OCIE0);
-		}
-		get_char();
-		char c = keypad[coordinates[0]][coordinates[1]];
-		if (c != 'w') {
-			timer0_multip = 0;
-			password[i] = c;
-			lcd_gotoxy((LCD_WIDTH - PASS_SIZE) / 2 + i, 1);
-			lcd_putc(c);
-			i++;
-		}
-		_delay_ms(200);
-		
-		if(reset_password_input) {
-			i = 0;
-			reset_password_input = 0;
-			lcd_clrscr();
-			lcd_home();
-			lcd_puts("Password:");
-		}
-	
-	}
-	
-	//disable timer0
+
+	user_input(password);
+	*(password+6) = '\0';
+
+	// Disable timer0
 	TIMSK &= ~_BV(OCIE0);
-	
-	// call delay function, so the last '*' can be shown too
-	_delay_ms(1000);
 	
 	lcd_clrscr();
 	lcd_gotoxy(1, 0);
-	password[PASS_SIZE] = '\0';
+	
 	lcd_puts("Password set!");
 	_delay_ms(1000);
 	lcd_clrscr();
 	lcd_puts("Armed");
 	_delay_ms(1000);
 	
-
-	password_set = 1;
 	armed = 1;
 }
 
 ISR(TIMER0_COMP_vect) {
 	timer0_multip++;
-	//if(timer0_multip >= 280) {
+
+	// Reset user input after 10 seconds
+	// 	if(timer0_multip >= 280) {
 	if(timer0_multip >= 50) {
 		timer0_multip = 0;
 		reset_password_input = 1;
 	}
 }
 
-int main(void)
-{
+int main(void) {
 	DDRD = _BV(4);
 	PIR_DDR = 0x00;
 	SIGNAL_DDR = 0xff;
 	SIGNAL_PRT = 0xff;
 	
-	//Timer 0 CTC mode, 1024 prescaler
+	// Timer 0 CTC mode, 1024 prescaler
 	TCCR0 = _BV(WGM01) | _BV(CS00) | _BV(CS02);
 	OCR0 = 255;
 	sei();
 
+	// LCD
 	TCCR1A = _BV(COM1B1) | _BV(WGM10);
 	TCCR1B = _BV(WGM12) | _BV(CS11);
 	OCR1B = 128;
 	
 	lcd_init(LCD_DISP_ON);
-	
-	set_password();
-	
+
+	char *password = (char*) malloc(7 * sizeof(char));
+	set_password(password);
+
 	while (1) {
 		get_char();
-		char c = keypad[coordinates[0]][coordinates[1]];
+		char option = keypad[coordinates[0]][coordinates[1]];
 		_delay_ms(200);
-		if (!armed) {
-			SIGNAL_PRT = 0xff;
-			lcd_clrscr();
-			lcd_puts("Unlocked!");
-		} else if(c == 'A') {
-			enter_password();
-		} else {
-			//movement detected
+		
+		if (armed) {
+			// If movement detected, sound the alarm
 			if(PIR_PIN & (1 << 0)) {
-				SIGNAL_PRT = 0xfe;
-				movement_detected = 1;
+				SIGNAL_PORT = 0xfe;
+			} 
+		} else {		
+			if(option == 'C') {
+				change_password();
+			} else if(option == 'A') {
+				// Arm
+				disArm(password, option);
 			}
-			
-			
+		} 
+
+		if(option == 'D') {
+			// Disarm
+			disArm(password, option);
 		}
 	}
+
+	free(password);
 }
-
-
