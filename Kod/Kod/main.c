@@ -86,6 +86,8 @@ void user_input(char *input) {
 		_delay_ms(200);
 		
 		if(reset_password_input) {
+			// Disable and reset timer0, set i to point to the begining
+			TIMSK &= ~_BV(OCIE0);
 			i = 0;
 			reset_password_input = 0;
 
