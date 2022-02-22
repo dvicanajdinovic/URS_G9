@@ -34,15 +34,14 @@ uint8_t reset_password_input = 0;
 uint8_t armed = 0;
 uint16_t timer0_multip = 0;
 
-uint8_t coordinates[2] = {3, 4};
-unsigned char keypad[4][5] = {
+unsigned char keypad[4][4] = {
 	{'D','#','0','*'},
 	{'C','9','8','7'},
 	{'B','6','5','4'},
-	{'A','3','2','1', 'w'}
+	{'A','3','2','1'}
 };
 
-void get_char() {
+char get_char() {
 	uint8_t r,c;
 	
 	KEY_DDR = 0x0f;
@@ -53,14 +52,11 @@ void get_char() {
 		
 		for (r = 0; r < 4; r++) {
 			if((KEY_PIN & (0b00001000 >> r)) == 0) {
-				coordinates[0] = r;
-				coordinates[1] = c;
-				return;
+				return keypad[r][c];
 			}
 		}
 	}
-	coordinates[0] = 3;
-	coordinates[1] = 4;
+	return 'w';
 }
 
 void user_input(char *input) {
@@ -72,10 +68,10 @@ void user_input(char *input) {
 			TIMSK = _BV(OCIE0);
 		}
 
-		get_char();
-		char c = keypad[coordinates[0]][coordinates[1]];
 		
-		if (c != 'w') {
+		char c = get_char();
+		
+		if ((c != 'w') & (c != 'A') & (c != 'B') & (c != 'C') & (c != 'D') & (c != '*') & (c != '#')) {
 			// Reset timer0
 			timer0_multip = 0;
 
@@ -252,9 +248,8 @@ void set_password(char *password) {
 	lcd_puts("Password set!");
 	_delay_ms(MESSAGE_DURATION);
 	lcd_clrscr();
-	lcd_puts("Armed");
+	lcd_puts("Alarm armed.");
 	_delay_ms(MESSAGE_DURATION);
-	
 	armed = 1;
 }
 
@@ -291,8 +286,7 @@ int main(void) {
 	set_password(password);
 
 	while (1) {
-		get_char();
-		char option = keypad[coordinates[0]][coordinates[1]];
+		char option = get_char();
 		_delay_ms(KEYPAD_DELAY);
 		
 		if (armed) {
