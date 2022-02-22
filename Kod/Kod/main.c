@@ -1,5 +1,9 @@
 #define F_CPU 7372800UL
 
+#define MESSAGE_DURATION 500
+#define INPUT_DURATION 200 
+#define KEYPAD_DELAY 200 
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
@@ -10,12 +14,12 @@
 #include "string.h"
 
 #define PIR_DDR		DDRC
-#define PIR_PORT		PORTC
+#define PIR_PORT	PORTC
 #define PIR_PIN		PINC
 #define PIR_SENSOR	PC0
 
 #define KEY_DDR 	DDRB
-#define KEY_PORT		PORTB
+#define KEY_PORT	PORTB
 #define KEY_PIN		PINB
 
 #define SIGNAL_DDR 	DDRA
@@ -42,7 +46,7 @@ void get_char() {
 	uint8_t r,c;
 	
 	KEY_DDR = 0x0f;
-	KEY_PRT = 0x0f;
+	KEY_PORT = 0x0f;
 	
 	for (c = 0; c < 4; c++) {
 		KEY_DDR = (0b10000000 >> c);
@@ -83,7 +87,7 @@ void user_input(char *input) {
 			
 			i++;
 		}
-		_delay_ms(200);
+		_delay_ms(KEYPAD_DELAY);
 		
 		if(reset_password_input) {
 			// Disable and reset timer0, set i to point to the begining
@@ -95,7 +99,7 @@ void user_input(char *input) {
 			lcd_puts("Input timed out,");
 			lcd_gotoxy(3, 1);
 			lcd_puts("try again.");
-			_delay_ms(600);
+			_delay_ms(MESSAGE_DURATION);
 
 			lcd_clrscr();
 			lcd_puts("Password:");
@@ -103,7 +107,7 @@ void user_input(char *input) {
 		
 	}
 	// Call delay function, so the last '*' can be shown too
-	_delay_ms(1000);
+	_delay_ms(MESSAGE_DURATION);
 }
 
 int verify_password(char *tmp_password, char *password) {
@@ -112,7 +116,7 @@ int verify_password(char *tmp_password, char *password) {
 		lcd_puts("Password");
 		lcd_gotoxy(3, 1);
 		lcd_puts("correct.");
-		_delay_ms(600);
+		_delay_ms(MESSAGE_DURATION);
 
 		return 1;
 	} else {
@@ -120,7 +124,7 @@ int verify_password(char *tmp_password, char *password) {
 		lcd_puts("Password");
 		lcd_gotoxy(3, 1);
 		lcd_puts("incorrect.");
-		_delay_ms(600);
+		_delay_ms(MESSAGE_DURATION);
 
 		return 0;
 	}
@@ -146,7 +150,7 @@ void disArm(char *password, char option) {
 
 			lcd_clrscr();
 			lcd_puts("Alarm armed.");
-			_delay_ms(600);
+			_delay_ms(MESSAGE_DURATION);
 		} else if (option == 'D') {
 			// If turned on, turn off the alarm
 			if (SIGNAL_PORT == 0xfe) SIGNAL_PORT = 0xff;
@@ -155,18 +159,30 @@ void disArm(char *password, char option) {
 
 			lcd_clrscr();
 			lcd_puts("Alarm disarmed.");
-			_delay_ms(600);
+			_delay_ms(MESSAGE_DURATION);
 		}	
+	} else {
+		lcd_clrscr();
+		if(armed) {
+			lcd_puts("Alarm armed.");
+		} else {
+			lcd_puts("Alarm disarmed.");
+		}
+		//_delay_ms(MESSAGE_DURATION);
 	}
 }
 
-void change_password() {
+void change_password(char *password) {
 	lcd_clrscr();
 	lcd_puts("Enter old");
 	lcd_gotoxy(3, 1);
 	lcd_puts("password.");
-	_delay_ms(200);
+	_delay_ms(MESSAGE_DURATION);
 
+	lcd_clrscr();
+	lcd_home();
+	lcd_puts("Password:");
+	
 	char *tmp_password = (char*) malloc(7 * sizeof(char));
 	user_input(tmp_password);
 
@@ -177,7 +193,11 @@ void change_password() {
 		lcd_puts("Please enter");
 		lcd_gotoxy(3, 1);
 		lcd_puts("new password:");
-		_delay_ms(300);
+		_delay_ms(MESSAGE_DURATION);
+		
+		lcd_clrscr();
+		lcd_home();
+		lcd_puts("Password:");
 		
 		char *new_password = (char*) malloc(7 * sizeof(char));
 		user_input(new_password);
@@ -188,7 +208,25 @@ void change_password() {
 		lcd_puts("Password");
 		lcd_gotoxy(3, 1);
 		lcd_puts("changed.");
-	} 
+		_delay_ms(MESSAGE_DURATION);
+		
+		lcd_clrscr();
+		lcd_home();
+		
+		if(armed) {
+			lcd_puts("Alarm armed.");
+		} else {
+			lcd_puts("Alarm disarmed.");
+		}
+	} else {
+		lcd_clrscr();
+		if(armed) {
+			lcd_puts("Alarm armed.");
+		} else {
+			lcd_puts("Alarm disarmed.");
+		}
+		//_delay_ms(MESSAGE_DURATION);
+	}
 }
 
 void set_password(char *password) {
@@ -196,7 +234,7 @@ void set_password(char *password) {
 	lcd_puts("Please set your");
 	lcd_gotoxy(3, 1);
 	lcd_puts("password!");
-	_delay_ms(1000);
+	_delay_ms(MESSAGE_DURATION);
 
 	lcd_clrscr();
 	lcd_home();
@@ -212,10 +250,10 @@ void set_password(char *password) {
 	lcd_gotoxy(1, 0);
 	
 	lcd_puts("Password set!");
-	_delay_ms(1000);
+	_delay_ms(MESSAGE_DURATION);
 	lcd_clrscr();
 	lcd_puts("Armed");
-	_delay_ms(1000);
+	_delay_ms(MESSAGE_DURATION);
 	
 	armed = 1;
 }
@@ -225,7 +263,7 @@ ISR(TIMER0_COMP_vect) {
 
 	// Reset user input after 10 seconds
 	// 	if(timer0_multip >= 280) {
-	if(timer0_multip >= 50) {
+	if(timer0_multip >= INPUT_DURATION) {
 		timer0_multip = 0;
 		reset_password_input = 1;
 	}
@@ -235,7 +273,7 @@ int main(void) {
 	DDRD = _BV(4);
 	PIR_DDR = 0x00;
 	SIGNAL_DDR = 0xff;
-	SIGNAL_PRT = 0xff;
+	SIGNAL_PORT = 0xff;
 	
 	// Timer 0 CTC mode, 1024 prescaler
 	TCCR0 = _BV(WGM01) | _BV(CS00) | _BV(CS02);
@@ -255,26 +293,26 @@ int main(void) {
 	while (1) {
 		get_char();
 		char option = keypad[coordinates[0]][coordinates[1]];
-		_delay_ms(200);
+		_delay_ms(KEYPAD_DELAY);
 		
 		if (armed) {
 			// If movement detected, sound the alarm
 			if(PIR_PIN & (1 << 0)) {
 				SIGNAL_PORT = 0xfe;
-			} 
-		} else {		
+			}
+			
+			if(option == 'D') {
+				// Disarm
+				disArm(password, option);
+			}
+		} else {
 			if(option == 'C') {
-				change_password();
+				change_password(password);
 			} else if(option == 'A') {
 				// Arm
 				disArm(password, option);
 			}
 		} 
-
-		if(option == 'D') {
-			// Disarm
-			disArm(password, option);
-		}
 	}
 
 	free(password);
