@@ -1,7 +1,7 @@
 #define F_CPU 7372800UL
 
-#define MESSAGE_DURATION 500
-#define INPUT_DURATION 200 
+#define MESSAGE_DURATION 2000
+#define INPUT_DURATION 200
 #define KEYPAD_DELAY 200 
 
 #include <avr/io.h>
@@ -30,6 +30,7 @@
 #define PASS_SIZE	6
 #define LCD_WIDTH   16
 
+uint8_t password_visible = 0;
 uint8_t reset_password_input = 0;
 uint8_t armed = 0;
 uint16_t timer0_multip = 0;
@@ -60,16 +61,16 @@ char get_char() {
 }
 
 void user_input(char *input) {
-
+	timer0_multip = 0;
 	uint8_t i = 0;
+	char c;
 	while (i < PASS_SIZE) {
 		// Enable timer0 to limit user input time
 		if(i == 1) {
 			TIMSK = _BV(OCIE0);
 		}
 
-		
-		char c = get_char();
+		c = get_char();
 		
 		if ((c != 'w') & (c != 'A') & (c != 'B') & (c != 'C') & (c != 'D') & (c != '*') & (c != '#')) {
 			// Reset timer0
@@ -78,9 +79,12 @@ void user_input(char *input) {
 			*(input + i) = c;
 
 			lcd_gotoxy((LCD_WIDTH - PASS_SIZE) / 2 + i, 1);
-			// lcd_putc('*');
-			lcd_putc(c);
 			
+			if(password_visible) {
+				lcd_putc(c);
+			} else {
+				lcd_putc('*');
+			}
 			i++;
 		}
 		_delay_ms(KEYPAD_DELAY);
@@ -102,6 +106,8 @@ void user_input(char *input) {
 		}
 		
 	}
+	// Disable timer0
+	TIMSK &= ~_BV(OCIE0);
 	// Call delay function, so the last '*' can be shown too
 	_delay_ms(MESSAGE_DURATION);
 }
@@ -126,18 +132,15 @@ int verify_password(char *tmp_password, char *password) {
 	}
 }
 
-void disArm(char *password, char option) {	
+void change_armed_state(char *password, char option) {	
 	lcd_clrscr();
-	lcd_puts("Enter password:");
+	lcd_puts("Password:");
 
     char *tmp_password = (char*) malloc(7 * sizeof(char));
 	
 	user_input(tmp_password);
 	
 	*(tmp_password+6) = '\0';
-
-    // Disable timer0
-	TIMSK &= ~_BV(OCIE0);
 
 	if (verify_password(tmp_password, password)) {
 		free(tmp_password);
@@ -253,6 +256,26 @@ void set_password(char *password) {
 	armed = 1;
 }
 
+void change_password_visibility () {
+	lcd_clrscr();
+	if(password_visible == 0) {
+		password_visible = 1;
+		lcd_puts("Password visible.");
+		_delay_ms(MESSAGE_DURATION);
+		} else {
+		password_visible = 0;
+		lcd_puts("Password hidden.");
+		_delay_ms(MESSAGE_DURATION);
+	}
+	lcd_clrscr();
+	if(armed) {
+		lcd_puts("Alarm armed.");
+	} else {
+		lcd_puts("Alarm disarmed.");
+	}
+	
+}
+
 ISR(TIMER0_COMP_vect) {
 	timer0_multip++;
 
@@ -285,8 +308,9 @@ int main(void) {
 	char *password = (char*) malloc(7 * sizeof(char));
 	set_password(password);
 
+	char option;
 	while (1) {
-		char option = get_char();
+		option = get_char();
 		_delay_ms(KEYPAD_DELAY);
 		
 		if (armed) {
@@ -297,16 +321,21 @@ int main(void) {
 			
 			if(option == 'D') {
 				// Disarm
-				disArm(password, option);
+				change_armed_state(password, option);
 			}
 		} else {
 			if(option == 'C') {
 				change_password(password);
 			} else if(option == 'A') {
 				// Arm
-				disArm(password, option);
+				change_armed_state(password, option);
 			}
-		} 
+		}
+		
+		if(option == 'B') {
+			change_password_visibility();
+		}
+		
 	}
 
 	free(password);
