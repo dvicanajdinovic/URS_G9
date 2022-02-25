@@ -136,7 +136,7 @@ void change_armed_state(char *password, char option) {
 	lcd_clrscr();
 	lcd_puts("Password:");
 
-    char *tmp_password = (char*) malloc(7 * sizeof(char));
+	char *tmp_password = (char*) malloc(7 * sizeof(char));
 	
 	user_input(tmp_password);
 	
@@ -262,7 +262,7 @@ void change_password_visibility () {
 		password_visible = 1;
 		lcd_puts("Password visible.");
 		_delay_ms(MESSAGE_DURATION);
-		} else {
+	} else {
 		password_visible = 0;
 		lcd_puts("Password hidden.");
 		_delay_ms(MESSAGE_DURATION);
